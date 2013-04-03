@@ -1,0 +1,519 @@
+@(title: String)(content: Html)
+
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>@title</title>
+<link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/main.css")">
+<link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/bootstrap/css/bootstrap.min.css")">
+<link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/style.css")">
+<link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/title.css")">
+<link rel="shortcut icon" type="image/png" href="@routes.Assets.at("images/favicon.png")">
+<script src="@routes.Assets.at("
+	javascripts/jquery-1.9.0.min.js")" type="text/javascript"></script>
+<script src="@routes.Assets.at("
+	javascripts/jquery.pep.min.js")" type="text/javascript"></script>
+<script type="text/javascript">
+	$(function() {
+		$('#logoutB').click(function() {
+			// フォームの生成
+			var form = document.createElement("form");
+			form.setAttribute("action", 'main.php');
+			form.setAttribute("method", "post");
+			form.style.display = "none";
+			document.body.appendChild(form);
+			// パラメタの設定
+			var input = document.createElement('input');
+			input.setAttribute('type', 'hidden');
+			input.setAttribute('name', 'command');
+			input.setAttribute('value', 'logout');
+			form.appendChild(input);
+			// submit
+			form.submit();
+		});
+	});
+</script>
+
+<script type="text/javascript">
+	$imgs = [];
+	$preImg = [];
+	$point = []; //TODO
+	$current = "0";
+	$maxz = 0; //TODO
+
+	onload = function() {
+		$('#toplayer').pep({
+			drag : function(ev, obj) {
+				var el = $(obj.el);
+				$("#img" + $current).css("top", (el.position().top));
+				$("#img" + $current).css("left", (el.position().left));
+				updatePos($current);
+			}
+		});
+		$("#toplayer").css("z-index", "220");
+		$('img').css('position', 'absolute');
+		//$draws;
+		layerPos("#img" + $current);
+	};
+
+	function draw(imageID, imagepath, x, y, l, visible) {
+		addIcon(imageID, imagepath, $maxz - l + 1, x, y, visible);
+		console.log(imagepath + " (" + x + "," + y + "," + l + ")  " + visible);
+		var v = !visible ? "hidden" : "visible";
+		var img = new Image();
+		img.src = imagepath + "?" + new Date().getTime();
+		img.onload = function() {
+			var s = imagesize(img);
+			console.log(s.toSource());
+			var canvas = addCanvas("img" + imageID, s['width'], s['height']);
+			var ctx = canvas.getContext('2d');
+			ctx.drawImage(img, 0, 0);
+			$(canvas).pep({
+				drag : function(ev, obj) {
+					var el = $(obj.el);
+					updatePos(el.attr("id"));
+				}
+			});
+			$(canvas).css({
+				"position" : "absolute",
+				"top" : y + "px",
+				"left" : x + "px",
+				"z-index" : l,
+				"visibility" : v
+			});
+
+			$imgs.push(canvas);
+		}
+	}
+
+	function addCanvas(imageID, width, height) {
+		var screen = document.getElementById('screen');
+		var id = imageID;
+		$('#screen').append(
+				$('<canvas></canvas>').attr('id', id).attr('width', width)
+						.attr('height', height));
+		var canvas = document.getElementById(id);
+		if (!canvas || !canvas.getContext)
+			return null;
+		return canvas;
+	}
+
+	function reload() {
+		window.location.reload();
+	}
+
+	function imagesize(image) {
+		var w = image.width, h = image.height;
+		if (typeof image.naturalWidth !== 'undefined') { // for Firefox, Safari, Chrome
+			w = image.naturalWidth;
+			h = image.naturalHeight;
+		} else if (typeof image.runtimeStyle !== 'undefined') { // for IE
+			var run = image.runtimeStyle;
+			var mem = {
+				w : run.width,
+				h : run.height
+			}; // keep runtimeStyle
+			run.width = "auto";
+			run.height = "auto";
+			w = image.width;
+			h = image.height;
+			run.width = mem.w;
+			run.height = mem.h;
+		} else { // for Opera
+			var mem = {
+				w : image.width,
+				h : image.height
+			}; // keep original style
+			image.removeAttribute("width");
+			image.removeAttribute("height");
+			w = image.width;
+			h = image.height;
+			image.width = mem.w;
+			image.height = mem.h;
+		}
+		return {
+			width : w,
+			height : h
+		};
+	}
+
+	$(function() {
+
+		$('#reload').click(function() {
+			window.location.reload();
+		});
+
+		$('#submit').click(function() {
+			upload();
+
+			console.log($imgs.toSource());
+			var formS = new Object();
+			var l = parseInt($imgs.length);
+			for ( var i in $imgs) {
+				value = $imgs[i];
+				var id = ($(value).attr("id")).replace('img', '');
+				var vtop = parseInt($(value).css("top"));
+				var vleft = parseInt($(value).css("left"));
+				var ly = $(value).css("z-index");
+				var visible = $(value).css("visibility") == "hidden" ? 0 : 1;
+				formS[id] = {
+					iID : id,
+					yp : vtop,
+					xp : vleft,
+					layer : ly,
+					v : visible
+				};
+				l--;
+			}
+			var jsonD = JSON.stringify(formS);
+			console.log(formS.toSource());
+			$.post("main.php", {
+				command : "chlayer",
+				pID : "",
+				"jsonD" : jsonD
+			}, //TODO
+			function(data) {
+				alert('変更しました！');
+			});
+		});
+
+		function upload() {
+			for ( var i in $preImg) {
+				var iid = "#img" + $preImg[i];
+				var visible = $(iid).css("visibility") == "hidden" ? 0 : 1;
+				$.post("main.php", {
+					command : "addImage",
+					pID : "", //TODO
+					upimg : ($("#IMG_" + $preImg[i]).attr("src")).replace(
+							/^data:image\/png;base64,/, ''),
+					xp : $(iid).css("left"),
+					yp : $(iid).css("top"),
+					clayer : $(iid).css("z-index"),
+					v : visible
+				}, function(data) {
+				});
+			}
+		}
+	});
+</script>
+<script type="text/javascript">
+	$zh = 100; //TODO
+	$zleft = 60;
+	$layertmp = 0;
+	$toptmp = 0;
+
+	function layerset(target) {
+		//$layertmp = $(target).css("z-index");
+		//$(target).css("z-index",200);
+	}
+	function layerchange(target) {
+		//$(target).css("z-index",2);
+		var topp = ((parseInt($(target).css("top"))) - $zh) / 100;
+		var index = Math.round(topp) * 100;
+		sort(index + $zh, target.id);
+	}
+	function sort(index, value) {
+		if (index < $zh + 100) {
+			index = $zh + 100;
+		}
+		for ( var i = 0; i < $point.length; i++) {
+			if ($point[i] == value
+					&& parseInt($("#" + $point[i]).css("top")) == index) {
+				break;
+			} else if ($point[i] == value) {
+				for (i; i < ($point.length - 1); i++) {
+					var px = ((i + 1) * 100) + $zh;
+					if (px != index) {
+						$point[i] = $point[i + 1];
+					} else {
+						break;
+					}
+				}
+				$point[i] = value;
+				break;
+			} else if (parseInt($("#" + $point[i]).css("top")) == index) {
+				var j = $point.indexOf(value);
+				for (j; i < j && 0 < j; j--) {
+					var px = ((j + 1) * 100) + $zh;
+					$point[j] = $point[j - 1];
+				}
+				$point[j] = value;
+				break;
+			}
+		}
+		if (($point.length) * 100 + $zh < index) {
+			index = (($point.length) * 100) + $zh;
+		}
+		$(value).css("top", index + "px");
+		sortimg();
+		reloadimg();
+	}
+
+	function sortimg() {
+		for ( var i = 0; i < $point.length; i++) {
+			$("#" + $point[i]).css("top", (((i + 1) * 100) + $zh) + "px");
+			$("#_" + $point[i]).css("top", (((i + 1) * 100) + $zh) + "px");
+		}
+	}
+
+	function reloadimg() {
+		var l = 1;
+		for ( var i = $point.length - 1; 0 <= i; i--) {
+			$lid = "#img" + $point[i];
+			$($lid).css("z-index", l);
+			l++;
+		}
+	}
+
+	function layerPos(iid, size) {
+		var s = size ? size : {
+			width : 1280,
+			height : 800
+		};
+		var top = parseInt($(iid).css("top"));
+		var left = parseInt($(iid).css("left"));
+		$("#toplayer").css({
+			"top" : top,
+			"left" : left,
+			"margin" : (top * (-1)) + "px 0px 0px " + (left * (-1)) + "px"
+		});
+	}
+</script>
+
+<script type="text/javascript">
+	jQuery.event.props.push('dataTransfer');
+
+	$(function() {
+		$("#toplayer").on(
+				{
+					drop : function(event) {
+						var xp = 0;
+						var yp = 0;
+						try {
+							xp = (event ? event.originalEvent.pageX
+									: document.body.scrollLeft + event.x);
+							yp = (event ? event.originalEvent.pageY
+									: document.body.scrollTop + event.y);
+						} catch (error) {
+						}
+						event.stopPropagation();
+						event.preventDefault();
+						var dt = event.dataTransfer;
+						var file = dt.files[0];
+						viewFileContent(file, xp, yp);
+					},
+					dragenter : false,
+					dragover : false,
+					mouseup : function(event) {
+						layerPos("#img" + $current);
+					}
+				});
+
+		function viewFileContent(file, xp, yp) {
+			if (!window.FileReader) {
+				alert("Din't support File API");
+				return;
+			}
+
+			if (file.type.match(/png/)) {
+				var fr = new FileReader();
+				fr.onload = function(event) {
+					var iid = "Preview" + $preImg.length;
+					var off = $("#screen").offset();
+					$preImg.push(iid);
+					_draw(iid, event.target.result, (xp - off.left),
+							(yp - off.top), ($point.length));
+				};
+				fr.readAsDataURL(file);
+			}
+		}
+
+		$(document).on(
+				{
+					click : (function(event) {
+						console.log(($(this).attr("id")).replace("\s", ""));
+						{
+							$("#" + $current).css("background",
+									"rgba(255,255,255,0)");
+							$("#img" + $current).css("background",
+									"rgba(255,255,255,0)");
+							//$("#img"+$current).css({"border":"none","margin":"0px"});
+
+							$current = $(this).attr("id");
+							$("#" + $current).css("background",
+									"rgba(33,33,175,0.2)");
+							$("#img" + $current).css("background",
+									"rgba(33,33,175,0.1)");
+							//$("#img"+$current).css({"border":"outset 0.1px #ee1111","margin":"-0.05px 0px 0px -0.05px"});
+
+							layerPos("#img" + $current);
+
+							layerset(event.target);
+						}
+					}),
+					mouseup : (function(event) {
+						layerchange(event.target);
+					}),
+					mouseout : (function(event) {
+						layerchange(event.target);
+					})
+				}, ".itemlayer");
+
+	});
+
+	function _draw(imageID, imagepath, x, y, l) {
+		x = parseInt(x);
+		y = parseInt(y);
+		var img = new Image();
+		img.src = imagepath;
+		img.onload = function() {
+			var s = imagesize(img);
+			console.log(s.toSource());
+			var canvas = addCanvas("img" + imageID, s['width'], s['height']);
+			var ctx = canvas.getContext('2d');
+			ctx.drawImage(img, 0, 0);
+			$(canvas).css("position", "absolute");
+			$(canvas).pep();
+			$(canvas).css("top", y);
+			$(canvas).css("left", x);
+			$(canvas).css("z-index", l);
+			$(canvas).css("visibility", "bisible");
+			addIcon(imageID, imagepath, 0, x, y, 1);
+		}
+	}
+
+	function addIcon(imageID, imagepath, z, x, y, visible) {
+		console.log("id : " + imageID + " ,  z : " + z + " , v : " + visible);
+		z = z || 0;
+		x = x || 0;
+		y = y || 0;
+		var message = visible == 0 ? "非表示" : "表示";
+
+		$("body")
+				.append(
+						"<div id='"+imageID+"' class='itemlayer' style='z-index:2;'></div><div id='_"+imageID+"' class='item'><table><tr><td><img id='IMG_"+imageID+"' src='"+imagepath+"'></td><td id='ilist' style='position:relative'><button id='visible_"
+								+ imageID
+								+ "' onclick='updateVisible(this)'>"
+								+ message
+								+ "</button><div id='xp"+imageID+"'>x:"
+								+ x
+								+ "</div><div id='yp"+imageID+"'>y:"
+								+ y
+								+ "</div></td></tr></table></div>");
+		$("#" + imageID).pep({
+			axis : "y",
+			drag : function(ev, obj) {
+				var el = $(obj.el);
+				$("#_" + el.attr("id")).css("top", (el.position().top));
+				$("#_" + el.attr("id")).css("left", (el.position().left));
+			}
+		});
+		$("#" + imageID).css({
+			"position" : "absolute",
+			"top" : $zh + (z * 100),
+			"left" : 20,
+			"height" : 84,
+			"width" : 120
+		});
+		$("#_" + imageID).css({
+			"position" : "absolute",
+			"top" : $zh + (z * 100),
+			"left" : 20,
+			"height" : 84,
+			"width" : 120
+		});
+		$("#IMG_" + imageID).css({
+			"height" : 70,
+			"width" : 70,
+			"border" : "outset 1px #DDDDDD",
+			"margin" : 5
+		});
+		$("#visible_" + imageID).css({
+			"position" : "absolute",
+			"top" : 10,
+			"right" : 10,
+			"width" : 24,
+			"font-size" : 10,
+			"line-height" : "11px",
+			"z-index" : 5,
+			"border" : "outset 1px #DDDDDD"
+		});
+		$("#xp" + imageID).css({
+			"position" : "absolute",
+			"bottom" : 18,
+			"font-size" : 10
+		});
+		$("#yp" + imageID).css({
+			"position" : "absolute",
+			"bottom" : 5,
+			"font-size" : 10
+		});
+		if (z == 0) {
+			$point.unshift(imageID);
+			sort((z * 100), "#" + imageID);
+		}
+	}
+
+	function updatePos(imageID) {
+		$("#xp" + imageID).html(
+				"x:" + parseInt($("#img" + imageID).css("left")));
+		$("#yp" + imageID)
+				.html("y:" + parseInt($("#img" + imageID).css("top")));
+	}
+
+	function updateVisible(target) {
+		var iid = ($(target).attr("id")).replace("visible_", "");
+		visibleImg(iid);
+	}
+	function visibleImg(imageID) {
+		var v = "";
+		var message = "";
+		if ($("#img" + imageID).css("visibility") == "visible") {
+			v = "hidden";
+			message = "非表示"
+		} else {
+			v = "visible";
+			message = "表示"
+		}
+		$("#img" + imageID).css("visibility", v);
+		$("#visible_" + imageID).html(message);
+	}
+</script>
+</head>
+<body>
+	<div class="title" align="right"></div>
+	<!-- TODO state -->
+	<h2 class="uandd">編集</h2>
+	<!-- 
+	<a href="top.php"><img id="top" src="img/Picx.png" style="position:absolute;top:-1px;left:20px;"></a>
+	-->
+	<div style="position: absolute; top: 40px; left: 250px;">
+		<!--
+		<a href="top.php">TOP</a> > 
+		<a href="edit.php">編集</a>
+		-->
+	</div>
+	<br>
+	<table>
+		<tr>
+			<td id="box" style="width: 170px;">
+				<!--
+			<div id="submit" class="btn" style="height:25px; width:80px; margin: 5px 5px 5px 30px;">変更を保存</div>
+			<div id="reload" class="btn" style="height:25px; width:80px; margin: 5px 5px 5px 30px;">更新</div>
+			-->
+			</td>
+			<td valign="top">
+				<div id="screen"
+					style="position: absolute; height: 800px; width: 1280px; border: outset 2px #00bfff;">
+					<div id="img0"
+						style="position: absolute; top: 0px; left: 0px; height: 1px; width: 1px;"></div>
+					<div id="toplayer"
+						style="position: absolute; top: 0px; left: 0px; height: 800px; width: 1280px; z-index: 220;"></div>
+				</div>
+			</td>
+		</tr>
+	</table>
+</body>
+</html>
